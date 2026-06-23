@@ -15,7 +15,12 @@
 	<description/>
 	<url/>
 	<licenses>
-		<license/>
+		<license>
+			<name>Apache-2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+			<comments>A business-friendly OSS license</comments>
+		</license>
 	</licenses>
 	<developers>
 		<developer/>
@@ -145,6 +150,34 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>license-maven-plugin</artifactId>
+				<version>2.6.0</version>
+				<configuration>
+					<verbose>false</verbose>
+					<addSvnKeyWords>false</addSvnKeyWords>
+					<licenseName>apache_v2</licenseName>
+					<licenseFile>${project.basedir}/../LICENSE</licenseFile>
+					<organizationName>Enrico Giurin</organizationName>
+					<inceptionYear>2026</inceptionYear>
+				</configuration>
+				<executions>
+					<execution>
+						<id>update-license-headers</id>
+						<goals>
+							<goal>update-file-header</goal>
+						</goals>
+						<phase>process-sources</phase>
+						<configuration>
+							<licenseName>apache_v2</licenseName>
+							<excludes>
+								<exclude>**/*.json</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
