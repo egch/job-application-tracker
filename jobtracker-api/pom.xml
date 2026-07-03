@@ -34,6 +34,10 @@
 	<properties>
 		<java.version>25</java.version>
 		<testcontainers.version>2.0.5</testcontainers.version>
+		<your-rents.version>0.0.4</your-rents.version>
+		<!-- credentials for the throwaway Postgres used at build time by jOOQ codegen -->
+		<building.db.username>jobtracker</building.db.username>
+		<building.db.password>jobtracker</building.db.password>
 	</properties>
 
 	<dependencyManagement>
@@ -48,6 +52,18 @@
 		</dependencies>
 	</dependencyManagement>
 	<dependencies>
+		<!-- your-rents dependencies -->
+		<dependency>
+			<groupId>com.your-rents.services</groupId>
+			<artifactId>your-rents-services-common-util</artifactId>
+			<version>${your-rents.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.your-rents.services</groupId>
+			<artifactId>your-rents-services-common-searchable</artifactId>
+			<version>${your-rents.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -179,6 +195,106 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!-- ==================================================================
+			     jOOQ code generation pipeline (runs in the generate-sources phase,
+			     in the order the plugins are declared):
+			       1. boot a throwaway Postgres via Testcontainers
+			       2. migrate V1/V2 into it with Flyway
+			       3. generate typed jOOQ sources from the migrated schema
+			     No live database is required for the build.
+			     ================================================================== -->
+
+			<!-- 1. Start a throwaway Postgres and expose its JDBC URL as a property -->
+			<plugin>
+				<groupId>org.codehaus.gmaven</groupId>
+				<artifactId>groovy-maven-plugin</artifactId>
+				<version>2.1.1</version>
+				<executions>
+					<execution>
+						<id>start-db</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>execute</goal>
+						</goals>
+						<configuration>
+							<source>
+								db = new org.testcontainers.containers.PostgreSQLContainer(
+										org.testcontainers.utility.DockerImageName.parse("postgres:16-alpine"))
+									.withUsername("${building.db.username}")
+									.withDatabaseName("jobtracker")
+									.withPassword("${building.db.password}")
+								db.start()
+								project.properties.setProperty('building.db.url', db.getJdbcUrl())
+							</source>
+						</configuration>
+					</execution>
+				</executions>
+				<dependencies>
+					<dependency>
+						<groupId>org.testcontainers</groupId>
+						<artifactId>testcontainers-postgresql</artifactId>
+						<version>${testcontainers.version}</version>
+					</dependency>
+				</dependencies>
+			</plugin>
+
+			<!-- 2. Migrate the Flyway scripts into that Postgres -->
+			<plugin>
+				<groupId>org.flywaydb</groupId>
+				<artifactId>flyway-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>db-migration</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>migrate</goal>
+						</goals>
+						<configuration>
+							<url>${building.db.url}</url>
+							<user>${building.db.username}</user>
+							<password>${building.db.password}</password>
+							<locations>
+								<location>filesystem:${project.basedir}/src/main/resources/db/migration</location>
+							</locations>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 3. Generate jOOQ sources from the migrated schema -->
+			<plugin>
+				<groupId>org.jooq</groupId>
+				<artifactId>jooq-codegen-maven</artifactId>
+				<executions>
+					<execution>
+						<id>jooq-generate</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<jdbc>
+								<url>${building.db.url}</url>
+								<user>${building.db.username}</user>
+								<password>${building.db.password}</password>
+							</jdbc>
+							<generator>
+								<database>
+									<name>org.jooq.meta.postgres.PostgresDatabase</name>
+									<includes>.*</includes>
+									<excludes>flyway_schema_history</excludes>
+									<inputSchema>public</inputSchema>
+								</database>
+								<target>
+									<packageName>org.enricogiurin.jobtracker.api.jooq</packageName>
+									<directory>target/generated-sources/jooq</directory>
+								</target>
+							</generator>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
