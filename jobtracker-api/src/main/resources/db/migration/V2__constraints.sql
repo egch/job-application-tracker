@@ -6,9 +6,9 @@
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
 -- You may obtain a copy of the License at
--- 
+--
 --      http://www.apache.org/licenses/LICENSE-2.0
--- 
+--
 -- Unless required by applicable law or agreed to in writing, software
 -- distributed under the License is distributed on an "AS IS" BASIS,
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,8 @@
 -- #L%
 ---
 -- ---------------------------------------------------------------------------
--- Primary keys, unique keys, foreign keys, check constraints and indexes for
--- the tables created in V1__initial_schema.sql.
+-- Primary keys, unique keys, foreign keys and indexes for the tables created
+-- in V1__initial_schema.sql.
 -- ---------------------------------------------------------------------------
 
 -- Primary keys ---------------------------------------------------------------
@@ -56,10 +56,6 @@ ALTER TABLE application
     ADD CONSTRAINT fk_application_employer
         FOREIGN KEY (employer_id) REFERENCES company (id);
 
-ALTER TABLE application
-    ADD CONSTRAINT fk_application_agency
-        FOREIGN KEY (agency_id) REFERENCES company (id);
-
 ALTER TABLE application_event
     ADD CONSTRAINT fk_application_event_application
         FOREIGN KEY (application_id) REFERENCES application (id) ON DELETE CASCADE;
@@ -74,22 +70,14 @@ ALTER TABLE attachment
     ADD CONSTRAINT fk_attachment_event
         FOREIGN KEY (event_id) REFERENCES application_event (id) ON DELETE SET NULL;
 
--- Check constraints ----------------------------------------------------------
-
--- Workload, when given, is a percentage in 1..100.
-ALTER TABLE application
-    ADD CONSTRAINT ck_application_workload_percent
-        CHECK (workload_percent IS NULL OR workload_percent BETWEEN 1 AND 100);
-
 -- Indexes --------------------------------------------------------------------
 
 -- Pipeline / Kanban view: a user's applications grouped by stage.
 CREATE INDEX idx_application_user_status ON application (user_id, status);
 -- Per-user listing ordered by application date.
 CREATE INDEX idx_application_user_applied_on ON application (user_id, applied_on);
--- Lookups / joins by organisation.
+-- Lookups / joins by employer.
 CREATE INDEX idx_application_employer ON application (employer_id);
-CREATE INDEX idx_application_agency ON application (agency_id);
 -- Timeline of an application, ordered by date.
 CREATE INDEX idx_application_event_application ON application_event (application_id, event_date);
 -- Attachments of an application / of a specific event.
