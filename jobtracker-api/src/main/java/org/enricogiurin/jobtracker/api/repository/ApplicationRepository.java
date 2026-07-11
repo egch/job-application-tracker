@@ -45,8 +45,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ApplicationRepository {
 
+    // SELECT column aliases, matching the Application record component names.
+    private static final String ID = "id";
+    private static final String EMPLOYER_ALIAS = "employer";
+    private static final String ROLE = "role";
+    private static final String POSTING_URL = "postingUrl";
+    private static final String STATUS = "status";
+    private static final String APPLIED_ON = "appliedOn";
+
     // alias company as the employer so the SELECT can join and embed it.
-    private static final Company EMPLOYER = COMPANY.as("employer");
+    private static final Company EMPLOYER = COMPANY.as(EMPLOYER_ALIAS);
 
     private final DSLContext dsl;
 
@@ -119,13 +127,13 @@ public class ApplicationRepository {
     private SelectOnConditionStep<Record6<UUID, CompanyRef, String, String,
             ApplicationStatus, LocalDate>> getSelectApplicationSpec() {
         return dsl.select(
-                APPLICATION.ID.as("id"),
+                APPLICATION.ID.as(ID),
                 row(EMPLOYER.ID, EMPLOYER.NAME)
-                        .mapping(nullOnAllNull(CompanyRef::new)).as("employer"),
-                APPLICATION.ROLE.as("role"),
-                APPLICATION.POSTING_URL.as("postingUrl"),
-                APPLICATION.STATUS.as("status"),
-                APPLICATION.APPLIED_ON.as("appliedOn"))
+                        .mapping(nullOnAllNull(CompanyRef::new)).as(EMPLOYER_ALIAS),
+                APPLICATION.ROLE.as(ROLE),
+                APPLICATION.POSTING_URL.as(POSTING_URL),
+                APPLICATION.STATUS.as(STATUS),
+                APPLICATION.APPLIED_ON.as(APPLIED_ON))
                 .from(APPLICATION)
                 .join(EMPLOYER).on(APPLICATION.EMPLOYER_ID.eq(EMPLOYER.ID));
     }

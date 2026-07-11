@@ -21,7 +21,6 @@ package org.enricogiurin.jobtracker.api.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.enricogiurin.jobtracker.api.jooq.Tables.APP_USER;
 import static org.enricogiurin.jobtracker.api.jooq.Tables.COMPANY;
 
 import java.time.LocalDate;
@@ -32,42 +31,36 @@ import org.enricogiurin.jobtracker.api.jooq.enums.ApplicationStatus;
 import org.enricogiurin.jobtracker.api.model.Application;
 import org.enricogiurin.jobtracker.api.model.CompanyRef;
 import org.jooq.DSLContext;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.jooq.test.autoconfigure.JooqTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Integration tests for {@link ApplicationRepository} against a real Postgres
  * (via Testcontainers), since the repository's value is in its jOOQ queries and
- * the {@code employer -> company} resolution against database constraints.
- *
- * <p>{@code @JooqTest} wraps each test in a transaction that rolls back, so the
- * schema stays clean between tests without manual cleanup.
+ * the {@code employer -> company} resolution against database constraints. The
+ * fixed ids below reference rows seeded by {@code test/db/migration/R__test_data.sql}.
  */
-@JooqTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, ApplicationRepository.class})
+@SpringBootTest
+@Import(TestcontainersConfiguration.class)
+@Transactional
 class ApplicationRepositoryTest {
+
+    // Ids seeded by R__test_data.sql.
+    private static final UUID OWNER_ID =
+            UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID SEEDED_COMPANY_ID =
+            UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID SEEDED_APPLICATION_ID =
+            UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private ApplicationRepository repository;
 
     @Autowired
     private DSLContext dsl;
-
-    private UUID ownerId;
-
-    @BeforeEach
-    void seedOwner() {
-        ownerId = dsl.insertInto(APP_USER)
-                .set(APP_USER.EMAIL, "owner-" + UUID.randomUUID() + "@example.com")
-                .returning(APP_USER.ID)
-                .fetchOne()
-                .getId();
-    }
 
     @Test
     void createInsertsNewCompanyWhenEmployerHasNameOnly() {
@@ -79,7 +72,7 @@ class ApplicationRepositoryTest {
                 null,
                 LocalDate.of(2026, 7, 1));
 
-        Application created = repository.create(ownerId, toCreate);
+        Application created = repository.create(OWNER_ID, toCreate);
 
         assertThat(created.id()).isNotNull();
         assertThat(created.employer().id()).isNotNull();
@@ -98,8 +91,9 @@ class ApplicationRepositoryTest {
                 .returning(COMPANY.ID)
                 .fetchOne()
                 .getId();
+        int companiesBefore = dsl.fetchCount(COMPANY);
 
-        Application created = repository.create(ownerId,
+        Application created = repository.create(OWNER_ID,
                 new Application(null, new CompanyRef(companyId, null),
                         "Data Engineer", null, ApplicationStatus.APPLIED,
                         LocalDate.of(2026, 6, 15)));
@@ -107,12 +101,12 @@ class ApplicationRepositoryTest {
         assertThat(created.employer().id()).isEqualTo(companyId);
         assertThat(created.employer().name()).isEqualTo("Existing Ltd");
         // no duplicate company is created when an id is supplied.
-        assertThat(dsl.fetchCount(COMPANY)).isEqualTo(1);
+        assertThat(dsl.fetchCount(COMPANY)).isEqualTo(companiesBefore);
     }
 
     @Test
     void createHonoursExplicitStatus() {
-        Application created = repository.create(ownerId,
+        Application created = repository.create(OWNER_ID,
                 new Application(null, new CompanyRef(null, "Interviewing Inc"),
                         "SRE", null, ApplicationStatus.INTERVIEWING, null));
 
@@ -124,7 +118,7 @@ class ApplicationRepositoryTest {
     void createRejectsNullEmployer() {
         Application toCreate = new Application(null, null, "Role", null, null, null);
 
-        assertThatThrownBy(() -> repository.create(ownerId, toCreate))
+        assertThatThrownBy(() -> repository.create(OWNER_ID, toCreate))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Missing employer company");
     }
@@ -134,7 +128,7 @@ class ApplicationRepositoryTest {
         Application toCreate = new Application(
                 null, new CompanyRef(null, "  "), "Role", null, null, null);
 
-        assertThatThrownBy(() -> repository.create(ownerId, toCreate))
+        assertThatThrownBy(() -> repository.create(OWNER_ID, toCreate))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Missing employer company name");
     }
@@ -145,7 +139,7 @@ class ApplicationRepositoryTest {
         Application toCreate = new Application(
                 null, new CompanyRef(unknownCompanyId, null), "Role", null, null, null);
 
-        assertThatThrownBy(() -> repository.create(ownerId, toCreate))
+        assertThatThrownBy(() -> repository.create(OWNER_ID, toCreate))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Company not found");
     }
@@ -157,10 +151,23 @@ class ApplicationRepositoryTest {
 
     @Test
     void findByIdReturnsCreatedApplication() {
-        Application created = repository.create(ownerId,
+        Application created = repository.create(OWNER_ID,
                 new Application(null, new CompanyRef(null, "Findable Co"),
                         "QA Engineer", null, null, null));
 
         assertThat(repository.findById(created.id())).contains(created);
+    }
+
+    @Test
+    void findByIdReadsExistingSeededApplication() {
+        Application expected = new Application(
+                SEEDED_APPLICATION_ID,
+                new CompanyRef(SEEDED_COMPANY_ID, "Seeded Company"),
+                "Staff Engineer",
+                "https://jobs.example.com/seeded/staff",
+                ApplicationStatus.INTERVIEWING,
+                LocalDate.of(2026, 5, 20));
+
+        assertThat(repository.findById(SEEDED_APPLICATION_ID)).contains(expected);
     }
 }
