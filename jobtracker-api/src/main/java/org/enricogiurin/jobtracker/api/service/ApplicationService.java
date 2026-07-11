@@ -19,6 +19,7 @@ package org.enricogiurin.jobtracker.api.service;
  * #L%
  */
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,6 +55,16 @@ public class ApplicationService {
      */
     public Optional<Application> findById(UUID id) {
         return repository.findById(id);
+    }
+
+    /**
+     * List all applications owned by the given user.
+     *
+     * @param ownerId the owning user (until auth is wired in, supplied by the caller)
+     * @return the owner's applications, possibly empty
+     */
+    public List<Application> findAllByOwner(UUID ownerId) {
+        return repository.findAllByOwner(ownerId);
     }
 
     /**

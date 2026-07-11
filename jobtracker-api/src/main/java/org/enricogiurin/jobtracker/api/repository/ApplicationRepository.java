@@ -26,6 +26,7 @@ import static org.jooq.Records.mapping;
 import static org.jooq.impl.DSL.row;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -67,6 +68,20 @@ public class ApplicationRepository {
                 .where(APPLICATION.ID.eq(id))
                 .fetchOptional()
                 .map(mapping(Application::new));
+    }
+
+    /**
+     * List all applications owned by the given user, most recently applied
+     * first (applications not yet submitted, with no {@code appliedOn}, last).
+     *
+     * @param ownerId the owning user
+     * @return the owner's applications, possibly empty
+     */
+    public List<Application> findAllByOwner(UUID ownerId) {
+        return getSelectApplicationSpec()
+                .where(APPLICATION.USER_ID.eq(ownerId))
+                .orderBy(APPLICATION.APPLIED_ON.desc().nullsLast())
+                .fetch(mapping(Application::new));
     }
 
     /**
